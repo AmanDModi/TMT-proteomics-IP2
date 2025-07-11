@@ -27,8 +27,8 @@ proteomics_analysis_project/
 
 1. Clone this repository:
 ```bash
-git clone <your-repo-url>
-cd proteomics_analysis_project
+git clone https://github.com/AmanDModi/TMT-proteomics-IP2.git
+cd TMT-proteomics-IP2
 ```
 
 2. Create and activate virtual environment:
