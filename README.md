@@ -1,6 +1,6 @@
 # Proteomics Data Analysis Pipeline
 
-A comprehensive Python pipeline for analyzing raw proteomics data from mass spectrometry experiments.
+Pipeline for processing IP2 TMT data
 
 ## Project Structure
 
@@ -65,33 +65,3 @@ results = analyze_proteins(processed_data)
 create_plots(results)
 ```
 
-### Jupyter Notebooks
-
-For interactive analysis, launch Jupyter:
-```bash
-jupyter notebook
-```
-
-## Features
-
-- **Data Loading**: Support for various proteomics data formats (CSV, Excel, mzML)
-- **Preprocessing**: Quality control, normalization, and filtering
-- **Statistical Analysis**: Differential expression, pathway analysis
-- **Visualization**: Volcano plots, heatmaps, PCA plots
-- **Export**: Results export in multiple formats
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Contact
-
-For questions or issues, please open an issue on GitHub.
