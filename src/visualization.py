@@ -60,7 +60,7 @@ def create_plots(
 
 
 def create_volcano_plot(
-    differential_results: Dict[str, Any],
+    differential_results: Union[Dict[str, Any], pd.DataFrame],
     pvalue_threshold: float = 0.05,
     fold_change_threshold: float = 1.5,
     interactive: bool = False,
@@ -71,8 +71,9 @@ def create_volcano_plot(
     
     Parameters
     ----------
-    differential_results : dict
-        Results from differential expression analysis
+    differential_results : dict or pd.DataFrame
+        Results from differential expression analysis (dict with 'results_df' key) 
+        or DataFrame directly
     pvalue_threshold : float, default 0.05
         P-value threshold for significance
     fold_change_threshold : float, default 1.5
@@ -87,10 +88,13 @@ def create_volcano_plot(
     matplotlib.Figure or plotly.graph_objects.Figure
         Volcano plot
     """
-    if 'results_df' not in differential_results:
-        raise ValueError("Differential results must contain 'results_df'")
-    
-    results_df = differential_results['results_df']
+    if isinstance(differential_results, dict):
+        if 'results_df' not in differential_results:
+            raise ValueError("Differential results must contain 'results_df'")
+        results_df = differential_results['results_df']
+    else:
+        # Assume it's a DataFrame directly
+        results_df = differential_results
     
     if interactive:
         return _create_interactive_volcano_plot(
@@ -111,35 +115,45 @@ def _create_static_volcano_plot(
     """Create a static volcano plot using matplotlib."""
     fig, ax = plt.subplots(figsize=(10, 8))
     
+    # Rename columns to match expected format
+    plot_df = results_df.copy()
+    if 'NORM_PVALUE_1' in plot_df.columns:
+        plot_df['pvalue'] = plot_df['NORM_PVALUE_1']
+    if 'log2_norm_ratio' in plot_df.columns:
+        plot_df['log2_fold_change'] = plot_df['log2_norm_ratio']
+    
     # Calculate -log10(p-value)
-    results_df['neg_log10_pvalue'] = -np.log10(results_df['pvalue'])
+    plot_df['neg_log10_pvalue'] = -np.log10(plot_df['pvalue'])
+    
+    # Calculate fold change from log2 fold change for significance criteria
+    plot_df['fold_change'] = 2 ** plot_df['log2_fold_change']
     
     # Define significance criteria
-    significant = (results_df['pvalue'] < pvalue_threshold) & \
-                 (abs(results_df['fold_change']) >= fold_change_threshold)
+    significant = (plot_df['pvalue'] < pvalue_threshold) & \
+                 (abs(plot_df['fold_change']) >= fold_change_threshold)
     
     # Plot points
     ax.scatter(
-        results_df.loc[~significant, 'log2_fold_change'],
-        results_df.loc[~significant, 'neg_log10_pvalue'],
+        plot_df.loc[~significant, 'log2_fold_change'],
+        plot_df.loc[~significant, 'neg_log10_pvalue'],
         alpha=0.6, color='gray', s=20, label='Not significant'
     )
     
     # Plot significant points
-    up_regulated = significant & (results_df['fold_change'] > 1)
-    down_regulated = significant & (results_df['fold_change'] < 1)
+    up_regulated = significant & (plot_df['fold_change'] > 1)
+    down_regulated = significant & (plot_df['fold_change'] < 1)
     
     if up_regulated.any():
         ax.scatter(
-            results_df.loc[up_regulated, 'log2_fold_change'],
-            results_df.loc[up_regulated, 'neg_log10_pvalue'],
+            plot_df.loc[up_regulated, 'log2_fold_change'],
+            plot_df.loc[up_regulated, 'neg_log10_pvalue'],
             alpha=0.8, color='red', s=30, label='Up-regulated'
         )
     
     if down_regulated.any():
         ax.scatter(
-            results_df.loc[down_regulated, 'log2_fold_change'],
-            results_df.loc[down_regulated, 'neg_log10_pvalue'],
+            plot_df.loc[down_regulated, 'log2_fold_change'],
+            plot_df.loc[down_regulated, 'neg_log10_pvalue'],
             alpha=0.8, color='blue', s=30, label='Down-regulated'
         )
     
@@ -166,18 +180,28 @@ def _create_interactive_volcano_plot(
     **kwargs
 ) -> go.Figure:
     """Create an interactive volcano plot using plotly."""
+    # Rename columns to match expected format
+    plot_df = results_df.copy()
+    if 'NORM_PVALUE_1' in plot_df.columns:
+        plot_df['pvalue'] = plot_df['NORM_PVALUE_1']
+    if 'log2_norm_ratio' in plot_df.columns:
+        plot_df['log2_fold_change'] = plot_df['log2_norm_ratio']
+    
     # Calculate -log10(p-value)
-    results_df['neg_log10_pvalue'] = -np.log10(results_df['pvalue'])
+    plot_df['neg_log10_pvalue'] = -np.log10(plot_df['pvalue'])
+    
+    # Calculate fold change from log2 fold change for significance criteria
+    plot_df['fold_change'] = 2 ** plot_df['log2_fold_change']
     
     # Define significance criteria
-    significant = (results_df['pvalue'] < pvalue_threshold) & \
-                 (abs(results_df['fold_change']) >= fold_change_threshold)
+    significant = (plot_df['pvalue'] < pvalue_threshold) & \
+                 (abs(plot_df['fold_change']) >= fold_change_threshold)
     
     # Create traces
     traces = []
     
     # Not significant
-    not_sig = results_df[~significant]
+    not_sig = plot_df[~significant]
     if not not_sig.empty:
         traces.append(go.Scatter(
             x=not_sig['log2_fold_change'],
@@ -186,11 +210,11 @@ def _create_interactive_volcano_plot(
             marker=dict(color='gray', size=5, opacity=0.6),
             name='Not significant',
             hovertemplate='<b>%{text}</b><br>log2(FC): %{x}<br>-log10(p): %{y}<extra></extra>',
-            text=not_sig['protein']
+            text=not_sig.get('ACCESSION', not_sig.get('protein', ''))
         ))
     
     # Up-regulated
-    up_reg = results_df[significant & (results_df['fold_change'] > 1)]
+    up_reg = plot_df[significant & (plot_df['fold_change'] > 1)]
     if not up_reg.empty:
         traces.append(go.Scatter(
             x=up_reg['log2_fold_change'],
@@ -199,11 +223,11 @@ def _create_interactive_volcano_plot(
             marker=dict(color='red', size=8, opacity=0.8),
             name='Up-regulated',
             hovertemplate='<b>%{text}</b><br>log2(FC): %{x}<br>-log10(p): %{y}<extra></extra>',
-            text=up_reg['protein']
+            text=up_reg.get('ACCESSION', up_reg.get('protein', ''))
         ))
     
     # Down-regulated
-    down_reg = results_df[significant & (results_df['fold_change'] < 1)]
+    down_reg = plot_df[significant & (plot_df['fold_change'] < 1)]
     if not down_reg.empty:
         traces.append(go.Scatter(
             x=down_reg['log2_fold_change'],
@@ -212,7 +236,7 @@ def _create_interactive_volcano_plot(
             marker=dict(color='blue', size=8, opacity=0.8),
             name='Down-regulated',
             hovertemplate='<b>%{text}</b><br>log2(FC): %{x}<br>-log10(p): %{y}<extra></extra>',
-            text=down_reg['protein']
+            text=down_reg.get('ACCESSION', down_reg.get('protein', ''))
         ))
     
     # Create figure
